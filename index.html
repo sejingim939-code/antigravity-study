@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>반즈 터너 (Band's Turner) - 자동 악보 넘김 앱</title>
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+  <!-- PDF.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+</head>
+<body class="dark-theme">
+  <!-- Main Application Wrapper -->
+  <div id="app" class="app-layout">
+    
+    <!-- Sidebar: Sheet Music List (Left) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
+          </svg>
+          <h1>Band's Turner</h1>
+        </div>
+        <p class="subtitle">자동 악보 넘김 시스템</p>
+      </div>
+
+      <!-- Upload Section -->
+      <div class="upload-area" id="upload-area">
+        <input type="file" id="file-input" accept="application/pdf" hidden>
+        <div class="upload-trigger" id="upload-trigger">
+          <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          <span>PDF 악보 추가</span>
+          <span class="upload-hint">드래그하거나 클릭하여 업로드</span>
+        </div>
+      </div>
+
+      <!-- Search and Filter -->
+      <div class="search-filter">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input type="text" id="search-input" placeholder="악보 제목 검색...">
+        </div>
+        <button class="filter-fav-btn" id="filter-fav-btn" title="즐겨찾기 모아보기">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="fav-icon-svg">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Music List -->
+      <div class="music-list-container">
+        <ul class="music-list" id="music-list">
+          <!-- Dynamically populated via JS -->
+        </ul>
+        <div class="empty-state" id="empty-state">
+          <p>등록된 악보가 없습니다.<br>PDF 파일을 추가해 주세요.</p>
+        </div>
+      </div>
+
+      <!-- App Info/Footer -->
+      <div class="sidebar-footer">
+        <span>고려대 SW의 활용 프로젝트</span>
+        <span class="developer">김세진 (영어영문학과)</span>
+      </div>
+    </aside>
+
+    <!-- Main Workspace (Center) -->
+    <main class="workspace" id="workspace">
+      <!-- Border Blink Overlay for warning -->
+      <div class="blink-overlay" id="blink-overlay"></div>
+      
+      <!-- No score selected view -->
+      <div class="welcome-screen" id="welcome-screen">
+        <div class="welcome-card">
+          <svg class="welcome-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
+          </svg>
+          <h2>양손이 자유로운 악보 뷰어</h2>
+          <p>좌측 사이드바에서 PDF 악보를 업로드하거나 선택하세요.<br>BPM에 맞추어 자동으로 페이지가 넘어갑니다.</p>
+        </div>
+      </div>
+
+      <!-- Score Viewer Active Mode -->
+      <div class="viewer-layout hidden" id="viewer-layout">
+        <!-- Toolbar/Header -->
+        <header class="viewer-header">
+          <div class="score-title-area">
+            <h2 id="active-score-title">악보 제목</h2>
+            <button class="btn-icon" id="btn-toggle-sidebar" title="목록 열기/닫기">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 3v18" />
+              </svg>
+            </button>
+          </div>
+          
+          <div class="viewer-actions">
+            <!-- Layout Toggle: 1 page vs 2 pages -->
+            <div class="view-mode-toggle">
+              <button class="btn-toggle active" id="btn-view-1page" title="1페이지 크게 보기">
+                1페이지
+              </button>
+              <button class="btn-toggle" id="btn-view-2page" title="2페이지 나란히 보기">
+                2페이지
+              </button>
+            </div>
+            
+            <!-- Zoom Controls -->
+            <div class="zoom-controls">
+              <button class="btn-icon" id="btn-zoom-out" title="축소">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" /><line x1="8" y1="12" x2="16" y2="12" />
+                </svg>
+              </button>
+              <span id="zoom-percent">100%</span>
+              <button class="btn-icon" id="btn-zoom-in" title="확대">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
+                </svg>
+              </button>
+              <button class="btn-icon" id="btn-zoom-reset" title="원래 크기">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <!-- Canvas Rendering Area -->
+        <div class="canvas-viewport" id="canvas-viewport">
+          <div class="canvas-container single-layout" id="canvas-container">
+            <!-- Renders pages as canvases dynamically -->
+          </div>
+          <!-- Manual Navigation Overlay zones (Left and Right edges for easy click/tap) -->
+          <div class="nav-zone nav-zone-left" id="nav-zone-left" title="이전 페이지"></div>
+          <div class="nav-zone nav-zone-right" id="nav-zone-right" title="다음 페이지"></div>
+        </div>
+
+        <!-- Floating Progress and Playback HUD -->
+        <div class="playback-hud" id="playback-hud">
+          <div class="hud-progress-bar">
+            <div class="hud-progress-fill" id="hud-progress-fill"></div>
+          </div>
+          <div class="hud-content">
+            <!-- Nav buttons -->
+            <button class="btn-hud" id="btn-prev-page" title="이전 페이지 (←)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            
+            <!-- Play/Pause Button -->
+            <button class="btn-hud-play" id="btn-play-trigger" title="재생/일시정지 (Space)">
+              <svg id="play-svg" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              <svg id="pause-svg" viewBox="0 0 24 24" fill="currentColor" class="hidden">
+                <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
+              </svg>
+            </button>
+
+            <button class="btn-hud" id="btn-next-page" title="다음 페이지 (→)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+
+            <!-- Status Info -->
+            <div class="hud-status-info">
+              <div class="hud-badge" id="hud-tempo-badge">120 BPM</div>
+              <div class="hud-time-remain" id="hud-time-remain">다음 페이지까지: --초</div>
+            </div>
+
+            <!-- Page Number Indicator -->
+            <div class="page-indicator" id="page-indicator">
+              페이지: <span id="current-page">1</span> / <span id="total-pages">1</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Settings Panel (Right Sidebar) -->
+    <aside class="settings-panel collapsed" id="settings-panel">
+      <button class="btn-toggle-settings" id="btn-toggle-settings" title="연주 설정 열기/닫기">
+        <svg class="gear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+        <span>설정</span>
+      </button>
+
+      <div class="settings-content">
+        <h3>곡 연주 설정</h3>
+        
+        <!-- BPM Section -->
+        <div class="setting-group">
+          <label>템포 (BPM)</label>
+          <div class="bpm-control-row">
+            <input type="number" id="input-bpm" min="40" max="250" value="120">
+            <button class="btn-tap-tempo" id="btn-tap-tempo" title="연주 박자에 맞춰 두드려주세요">
+              TAP TEMPO
+            </button>
+          </div>
+          <input type="range" id="range-bpm" min="40" max="250" value="120" class="slider">
+        </div>
+
+        <!-- Time Signature Section -->
+        <div class="setting-group">
+          <label>박자표 (Time Signature)</label>
+          <select id="select-time-signature">
+            <option value="4">4/4 박자</option>
+            <option value="3">3/4 박자</option>
+            <option value="2">2/4 박자</option>
+            <option value="6">6/8 박자</option>
+            <option value="12">12/8 박자</option>
+          </select>
+        </div>
+
+        <!-- Instrument Section -->
+        <div class="setting-group">
+          <label>연주 악기 (TAB 스캔 기준)</label>
+          <select id="select-instrument">
+            <option value="guitar" selected>기타 (6줄 TAB)</option>
+            <option value="bass">베이스 (4줄 TAB)</option>
+            <option value="standard">일반 오선보 (5줄)</option>
+          </select>
+        </div>
+
+        <!-- Gemini AI Settings Section -->
+        <div class="setting-group">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label>Gemini API 키 (AI 스캔용)</label>
+            <span id="api-key-status" style="font-size: 11px; color: var(--color-success); display: none;">✓ 저장됨</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="password" id="input-api-key" placeholder="API 키를 입력하세요" style="flex-grow: 1; height: 38px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; padding: 0 12px; font-size: 13px; outline: none;">
+            <button id="btn-save-api-key" style="background: var(--bg-card); border: 1px solid var(--border-color); color: #fff; font-size: 12px; font-weight: 600; padding: 0 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;">저장</button>
+          </div>
+          <p class="setting-hint">키를 넣으면 AI가 악보 이미지를 해독하여 마디 수를 초정밀 스캔합니다. (미입력 시 로컬 스캔 작동)</p>
+        </div>
+
+        <!-- Countdown Section -->
+        <div class="setting-group">
+          <label>시작 대기 시간 (카운트다운)</label>
+          <div class="countdown-toggle-group">
+            <button class="btn-countdown" data-time="3">3초</button>
+            <button class="btn-countdown active" data-time="5">5초</button>
+            <button class="btn-countdown" data-time="10">10초</button>
+          </div>
+        </div>
+
+        <!-- Measures Per Page Section -->
+        <div class="setting-group">
+          <div class="measures-header-row">
+            <label>페이지별 마디 수</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="chk-measures-uniform" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">일괄 적용</span>
+            </label>
+          </div>
+          
+          <button class="btn-scan-measures" id="btn-scan-measures" title="악보 이미지를 분석하여 마디 수를 자동 감지합니다">
+            <svg class="scan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 3h16a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+              <line x1="12" y1="3" x2="12" y2="21" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+            </svg>
+            <span>자동 마디 감지 (AI 스캔)</span>
+          </button>
+          
+          <!-- Uniform Measures Input -->
+          <div id="uniform-measures-container">
+            <div class="input-row">
+              <span>모든 페이지: </span>
+              <input type="number" id="input-measures-uniform" min="1" max="64" value="16">
+              <span>마디</span>
+            </div>
+          </div>
+
+          <!-- Individual Measures Input (Hidden initially) -->
+          <div id="individual-measures-container" class="hidden">
+            <p class="setting-hint">각 페이지의 마디 수를 입력하세요:</p>
+            <div class="measures-grid" id="measures-grid-inputs">
+              <!-- JS will inject page inputs -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Calculations Result Panel -->
+        <div class="timing-summary">
+          <h4>예상 페이지별 대기시간</h4>
+          <div id="timing-summary-list">
+            <!-- Dynamically calculated times -->
+          </div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- Fullscreen Countdown Overlay -->
+  <div class="countdown-overlay hidden" id="countdown-overlay">
+    <div class="countdown-number" id="countdown-number">5</div>
+    <div class="countdown-text">연주가 곧 시작됩니다. 양손을 준비하세요!</div>
+    <button class="btn-cancel-countdown" id="btn-cancel-countdown">취소 (ESC)</button>
+  </div>
+
+  <!-- App JavaScript -->
+  <script src="app.js"></script>
+</body>
+</html>
